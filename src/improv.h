@@ -42,6 +42,7 @@ enum Command : uint8_t {
   GET_CURRENT_STATE = 0x02,
   GET_DEVICE_INFO = 0x03,
   GET_WIFI_NETWORKS = 0x04,
+  CUSTOM = 0x80,
   BAD_CHECKSUM = 0xFF,
 };
 
@@ -57,8 +58,7 @@ enum ImprovSerialType : uint8_t {
 
 struct ImprovCommand {
   Command command;
-  std::string ssid;
-  std::string password;
+  std::vector<std::vector<uint8_t>> data;
 };
 
 ImprovCommand parse_improv_data(const std::vector<uint8_t> &data, bool check_checksum = true);

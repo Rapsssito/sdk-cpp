@@ -11,8 +11,10 @@ ImprovCommand parse_improv_data(const uint8_t *data, size_t length, bool check_c
   ImprovCommand improv_command;
   Command command = (Command) data[0];
   uint8_t data_length = data[1];
+  improv_command.command = command;
+  uint8_t checksum_offset = check_checksum ? 1 : 0;
 
-  if (data_length != length - 2 - check_checksum) {
+  if (data_length != length - 2 - checksum_offset) {
     improv_command.command = UNKNOWN;
     return improv_command;
   }
@@ -31,26 +33,39 @@ ImprovCommand parse_improv_data(const uint8_t *data, size_t length, bool check_c
     }
   }
 
-  if (command == WIFI_SETTINGS) {
-    uint8_t ssid_length = data[2];
-    uint8_t ssid_start = 3;
-    size_t ssid_end = ssid_start + ssid_length;
-    if (ssid_end > length) {
-      improv_command.command = UNKNOWN;
-      return improv_command;
+  // Special handling for commands with data segments
+  if (command == WIFI_SETTINGS || command == CUSTOM) {
+    size_t position = 2; // Start after command and length bytes
+    while (position < length - checksum_offset) {
+      // Check we have at least 1 byte for segment length
+      if (position + 1 > length - checksum_offset) {
+        improv_command.command = UNKNOWN;
+        return improv_command;
+      }
+
+      uint8_t segment_length = data[position];
+
+      // Check segment length isn't larger than remaining data
+      if (segment_length > (length - checksum_offset - position - 1)) {
+        improv_command.command = UNKNOWN;
+        return improv_command;
+      }
+
+      size_t segment_start = position + 1;
+      size_t segment_end = segment_start + segment_length;
+
+      // Check segment end isn't larger than remaining data
+      if (segment_end > length - checksum_offset) {
+        improv_command.command = UNKNOWN;
+        return improv_command;
+      }
+
+      std::vector<uint8_t> segment(data + segment_start, data + segment_end);
+      improv_command.data.push_back(segment);
+      position = segment_end;
     }
 
-    uint8_t pass_length = data[ssid_end];
-    size_t pass_start = ssid_end + 1;
-    size_t pass_end = pass_start + pass_length;
-    if (pass_end > length) {
-      improv_command.command = UNKNOWN;
-      return improv_command;
-    }
-
-    std::string ssid(data + ssid_start, data + ssid_end);
-    std::string password(data + pass_start, data + pass_end);
-    return {.command = command, .ssid = ssid, .password = password};
+    return improv_command;
   }
 
   improv_command.command = command;
